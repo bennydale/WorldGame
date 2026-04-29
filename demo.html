@@ -21,8 +21,8 @@ body, html { width: 100%; height: 100%; padding: 0; margin: 0; }
 canvas {
   /* border-radius: 30px;  Border radiuses don't seem to work with putImageData */
   box-shadow: 0 0 10px #777;
-  width: 1920px;
-  height: 1080px;
+  width: 800px;
+  height: 600px;
 }
 body {
   background-color: #eee;
@@ -32,75 +32,189 @@ body {
 <script src='perlin.js'></script>
 <script>
 var canvas = document.getElementsByTagName('canvas')[0];
-canvas.width = 524;
-canvas.height = 708;
-
+canvas.width = 640 ;
+canvas.height = 480;
+var grass = new Image()
+grass.src = "/Textures/Background/Grass.png"
 var ctx = canvas.getContext('2d');
 
 var image = ctx.createImageData(canvas.width, canvas.height);
 var data = image.data;
 
-var start = Date.now();
-
-for (var x = 0; x < canvas.width; x++) {
-  //if (x % 100 == 0) {
-  //  noise.seed(Math.random());
-  //}
-  for (var y = 0; y < canvas.height; y++) {
-    var value = Math.abs(noise.perlin2(x / 100, y / 100));
-    value *= 425;
-    var landValue = [value,value,value]
-    if (value < 15){
-      landValue = [0,0,50]
-    };
-    if (value > 15 && value < 40){
-      landValue = [0,0,125]
-    };
-        if (value > 40 && value < 55){
-      landValue = [0,0,200]
-    }
-    if (value > 55 && value < 60){
-      landValue = [0,0,255]
-    }
-    if (value > 60 && value < 70){
-      landValue = [255,255,0]
-    }
-        if (value > 70 && value < 140){
-      landValue = [0,200,0]
-    }
-            if (value > 140){
-      landValue = [25,25,25]
-    }
 
 
-    var cell = (x + y * canvas.width) * 4;
-    data[cell] = landValue[0]   //r
-    data[cell + 1] = landValue[1] //g
-    data[cell + 2] = landValue[2]; //b
-    //data[cell] += Math.max(0, (25 - value) * 8);
-    data[cell + 3] = 255; // alpha.
+
+
+
+var activeKeys = {}
+  document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp'){
+          activeKeys.up = true
+        }
+        if (e.key === 'ArrowDown'){
+          activeKeys.down = true
+        }
+        if (e.key === 'ArrowLeft'){
+          activeKeys.left = true
+        }
+        if (e.key === 'ArrowRight'){
+          activeKeys.right = true
+        } 
+        if (e.key === 'w'){
+          activeKeys.up = true
+        }
+        if (e.key === 's'){
+          activeKeys.down = true
+        }
+        if (e.key === 'a'){
+          activeKeys.left = true
+        }
+        if(e.key === 'd'){
+          activeKeys.right = true
+        }
+        
+    });
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Shift'){
+          activeKeys.shift = true
+        }
+    })
+    document.addEventListener('keyup', function(e){
+        if (e.key === 'Shift'){
+          activeKeys.shift = false
+        }
+    })
+    document.addEventListener('keyup', function(e) {
+        if (e.key === 'ArrowUp'){
+          activeKeys.up = false
+        }
+        if (e.key === 'ArrowDown'){
+          activeKeys.down = false
+        }
+        if (e.key === 'ArrowLeft'){
+          activeKeys.left = false
+        }
+        if (e.key === 'ArrowRight'){
+          activeKeys.right = false
+        } 
+        if (e.key === 'w'){
+          activeKeys.up = false
+        }
+        if (e.key === 's'){
+          activeKeys.down = false
+        }
+        if (e.key === 'a'){
+          activeKeys.left = false
+        }
+        if(e.key === 'd'){
+          activeKeys.right = false
+        }
+    });
+
+
+var DX = 0
+var DY = 0
+var DZ = 1
+var DZX = 0
+var DZY = 0
+canvas.addEventListener('mousewheel', function(event) {
+  console.log(event)
+  if(event.deltaY > 0){
+    DZ += 0.05
   }
+  if(event.deltaY < 0){
+    DZ -= 0.05
+    if (DZ < .01){
+      DZ = .01
+    }
+  }
+  DZX = event.offsetX
+  DZY = event.offsetY
+  console.log(DZ)
+}, false);
+function drawMap(){
+  var start = Date.now();
+  if (activeKeys.down){
+    DY ++;
+  }
+    if (activeKeys.up){
+    DY --;
+  }
+    if (activeKeys.left){
+    DX --;
+  }
+    if (activeKeys.right){
+    DX ++;
+  }
+  for (var x = 0; x < canvas.width; x++) {
+    //if (x % 100 == 0) {
+    //  noise.seed(Math.random());
+    //}
+    for (var y = 0; y < canvas.height; y++) {
+
+      var value = Math.abs(noise.perlin2((x + DX) / 100 * DZ, (y + DY) / 100 * DZ));
+
+      value *= 425;
+      var landValue = [value,value,value]
+      if (value < 15){
+        landValue = [0,0,50]
+      };
+      if (value > 15 && value < 40){
+        landValue = [0,0,125]
+      };
+          if (value > 40 && value < 55){
+        landValue = [0,0,200]
+      }
+      if (value > 55 && value < 60){
+        landValue = [0,0,255]
+      }
+      if (value > 60 && value < 70){
+        landValue = [255,255,0]
+      }
+          if (value > 70 && value < 140){
+        landValue = [0,200,0]
+      }
+              if (value > 140){
+        landValue = [25,25,25]
+      }
+
+
+      var cell = (x + y * canvas.width) * 4;
+      data[cell] = landValue[0]   //r
+      data[cell + 1] = landValue[1] //g
+      data[cell + 2] = landValue[2]; //b
+      //data[cell] += Math.max(0, (25 - value) * 8);
+      data[cell + 3] = 255; // alpha.
+    }
+  }
+  var end = Date.now();
+
+  ctx.fillColor = 'Black';
+  ctx.fillRect(0, 0, 0, 100);
+  ctx.putImageData(image, 0, 0);
+
+
+
+  ctx.font = '16px sans-serif'
+  ctx.textAlign = 'center';
+  ctx.fillText('Rendered in ' + (end - start) + ' ms', canvas.width / 2, canvas.height - 20);
+
 }
 
-/* // Benchmark code.
-start = Date.now();
-for (var x = 0; x < 10000; x++) {
-  for (var y = 0; y < 10000; y++) {
-    noise.simplex2(x / 50, y/50);
-  }
+  /* // Benchmark code.
+  start = Date.now();
+  for (var x = 0; x < 10000; x++) {
+    for (var y = 0; y < 10000; y++) {
+      noise.simplex2(x / 50, y/50);
+    }
 }*/
-var end = Date.now();
-
-ctx.fillColor = 'Black';
-ctx.fillRect(0, 0, 0, 100);
-ctx.putImageData(image, 0, 0);
 
 
-ctx.font = '16px sans-serif'
-ctx.textAlign = 'center';
-ctx.fillText('Rendered in ' + (end - start) + ' ms', canvas.width / 2, canvas.height - 20);
 
-if(console) {
-  console.log('Rendered in ' + (end - start) + ' ms');
+function gameLoop(){
+  drawMap()
+  requestAnimationFrame(gameLoop)
 }
+
+requestAnimationFrame(gameLoop)
 </script>
