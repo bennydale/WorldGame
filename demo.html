@@ -26,6 +26,7 @@ canvas {
 }
 body {
   background-color: #eee;
+  overflow-y: hidden;
 }
 </style>
 <div class='centerbox'><canvas></canvas></div>
@@ -34,6 +35,7 @@ body {
 var canvas = document.getElementsByTagName('canvas')[0];
 canvas.width = 640 ;
 canvas.height = 480;
+
 var grass = new Image()
 grass.src = "/Textures/Background/Grass.png"
 var ctx = canvas.getContext('2d');
@@ -117,6 +119,9 @@ var DY = 0
 var DZ = 1
 var DZX = 0
 var DZY = 0
+var vcw = canvas.width
+var vch = canvas.height
+/*
 canvas.addEventListener('mousewheel', function(event) {
   console.log(event)
   if(event.deltaY > 0){
@@ -132,66 +137,156 @@ canvas.addEventListener('mousewheel', function(event) {
   DZY = event.offsetY
   console.log(DZ)
 }, false);
+*/ 
+DZ = 15
+
+var backgroundTextures = {
+  "DeepestWater":0,
+  "DeepWater":1,
+  "MediumWater":2,
+  "ShallowWater":3,
+  "Sand":4,
+  "Grass":5,
+  "MountainExtraLow":6,
+  "MountainLow":7,
+  "MountainMed":8,
+  "MountainHigh":9,
+  "MountainSnow":10 
+}
+var backgroundTextureImages = {}
+var i=0
+for (const textureName in backgroundTextures) {
+  backgroundTextureImages[i] = new Image()
+  backgroundTextureImages[i].src = "Textures/Background/" + textureName + ".png"
+  i++;
+}
+
+var mapFractal = []
+for (var x = 0; x < vcw *2; x++) {
+  //if (x % 100 == 0) {
+  //  noise.seed(Math.random());
+  //}
+  mapFractal[x] = []
+  for (var y = 0; y < vch * 2; y++) {
+    var valueSSS = Math.abs(noise.perlin2((x + DX) / 5 * DZ, (y + DY) / 5 * DZ));
+    valueSSS *= 20
+    var valueSS = Math.abs(noise.perlin2((x + DX) / 10 * DZ, (y + DY) / 10 * DZ));
+    valueSS *= 25
+    var valueS = Math.abs(noise.perlin2((x + DX) / 25 * DZ, (y + DY) / 25 * DZ));
+    valueS *= 50
+    var value = Math.abs(noise.perlin2(((x + DX) / 100 * DZ), (y + DY) / 100 * DZ));
+    value *= 76
+    var valueA = Math.abs(noise.perlin2(((x + DX) / 3200 * DZ), (y + DY) / 3200 * DZ));
+    valueA *= 480
+    valueSS -= valueSSS
+    valueS -= valueSS
+    value -= valueS
+    valueA -= value
+
+  mapFractal[x][y] = backgroundTextures.Grass
+    if (valueA < 24){
+      //landValue = [0,0,50]
+        mapFractal [x][y] = backgroundTextures.DeepestWater
+    };
+    if (valueA > 24 && valueA < 50){
+      // landValue = [0,0,125]
+      mapFractal [x][y] = backgroundTextures.DeepWater
+    };
+    if (valueA > 50 && valueA < 65){
+      //landValue = [0,0,200]
+      mapFractal [x][y] = backgroundTextures.MediumWater
+    }
+    if (valueA > 65 && valueA < 85){
+      //landValue = [0,0,255]
+      mapFractal [x][y] = backgroundTextures.ShallowWater
+    }
+    if (valueA > 85 && valueA < 100){
+      //landValue = [255,255,0]
+      mapFractal [x][y] = backgroundTextures.Sand
+    }
+    if (valueA > 100 && valueA < 160){
+      //landValue = [0,200,0]
+      mapFractal [x][y] = backgroundTextures.Grass
+    }
+    if (valueA > 160 && valueA < 170){
+      //landValue = [25,25,25]
+      mapFractal [x][y] = backgroundTextures.MountainExtraLow
+    }
+    if (valueA > 170 && valueA < 185){
+      //landValue = [25,25,25]
+      mapFractal [x][y] = backgroundTextures.MountainLow
+    }
+    if (valueA > 185 && valueA < 200){
+      //landValue = [25,25,25]
+      mapFractal [x][y] = backgroundTextures.MountainMed
+    }
+    if (valueA > 200 && valueA < 230){
+      //landValue = [25,25,25]
+      mapFractal [x][y] = backgroundTextures.MountainHigh
+    }
+        if (valueA > 230){
+      //landValue = [25,25,25]
+      mapFractal [x][y] = backgroundTextures.MountainSnow
+    }
+
+    /*
+        var cell = ((x ) + (y ) * canvas.width) * 4;
+        data[cell] = landValue[0]   //r
+        data[cell + 1] = landValue[1] //g
+        data[cell + 2] = landValue[2]; //b
+        //data[cell] += Math.max(0, (25 - value) * 8);
+        data[cell + 3] = 255; // alpha.
+        */
+  }
+}
+// center it against the fractal map
+var vHeight = canvas.width/32
+var vWidth = canvas.width/32
+var viewerWindow = {
+  x: (canvas.width/2) - (vWidth)/2,
+  y: (canvas.height/2) - parseInt((vHeight)/2),
+  h: vHeight,
+  w: vWidth
+}
+
 function drawMap(){
   var start = Date.now();
   if (activeKeys.down){
-    DY ++;
+    viewerWindow.y ++;
   }
     if (activeKeys.up){
-    DY --;
+    viewerWindow.y --;
+    if (viewerWindow.y < 0){viewerWindow.y = 0}
   }
     if (activeKeys.left){
-    DX --;
+    viewerWindow.x --;
+    if (viewerWindow.x < 0){viewerWindow.x = 0}
   }
     if (activeKeys.right){
-    DX ++;
+    viewerWindow.x ++;
   }
-  for (var x = 0; x < canvas.width; x++) {
-    //if (x % 100 == 0) {
-    //  noise.seed(Math.random());
-    //}
-    for (var y = 0; y < canvas.height; y++) {
-
-      var value = Math.abs(noise.perlin2((x + DX) / 100 * DZ, (y + DY) / 100 * DZ));
-
-      value *= 425;
-      var landValue = [value,value,value]
-      if (value < 15){
-        landValue = [0,0,50]
-      };
-      if (value > 15 && value < 40){
-        landValue = [0,0,125]
-      };
-          if (value > 40 && value < 55){
-        landValue = [0,0,200]
-      }
-      if (value > 55 && value < 60){
-        landValue = [0,0,255]
-      }
-      if (value > 60 && value < 70){
-        landValue = [255,255,0]
-      }
-          if (value > 70 && value < 140){
-        landValue = [0,200,0]
-      }
-              if (value > 140){
-        landValue = [25,25,25]
-      }
+ 
 
 
-      var cell = (x + y * canvas.width) * 4;
-      data[cell] = landValue[0]   //r
-      data[cell + 1] = landValue[1] //g
-      data[cell + 2] = landValue[2]; //b
-      //data[cell] += Math.max(0, (25 - value) * 8);
-      data[cell + 3] = 255; // alpha.
+  for (var x = 0; x < canvas.width/8; x++) {
+    for (var y = 0; y < canvas.height/8; y++) {
+
+      var mapFractalTextureIndex = mapFractal[viewerWindow.x + x][viewerWindow.y + y]
+      if (!backgroundTextureImages[mapFractalTextureIndex]){
+        debugger
+      }
+      ctx.drawImage(backgroundTextureImages[mapFractalTextureIndex],
+        x * 8, 
+        y * 8,
+        8, 
+        8
+      )
     }
   }
   var end = Date.now();
 
   ctx.fillColor = 'Black';
-  ctx.fillRect(0, 0, 0, 100);
-  ctx.putImageData(image, 0, 0);
+
 
 
 
@@ -200,6 +295,7 @@ function drawMap(){
   ctx.fillText('Rendered in ' + (end - start) + ' ms', canvas.width / 2, canvas.height - 20);
 
 }
+
 
   /* // Benchmark code.
   start = Date.now();
