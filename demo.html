@@ -21,12 +21,15 @@ body, html { width: 100%; height: 100%; padding: 0; margin: 0; }
 canvas {
   /* border-radius: 30px;  Border radiuses don't seem to work with putImageData */
   box-shadow: 0 0 10px #777;
-  width: 800px;
-  height: 600px;
+  width: 640px;
+  height: 480px;
+  image-rendering: pixelated;
+
 }
 body {
   background-color: #eee;
   overflow-y: hidden;
+  overflow-x: hidden;
 }
 </style>
 <div class='centerbox'><canvas></canvas></div>
@@ -116,29 +119,27 @@ var activeKeys = {}
 
 var DX = 0
 var DY = 0
-var DZ = 1
+var DZ = 8
 var DZX = 0
 var DZY = 0
 var vcw = canvas.width
 var vch = canvas.height
-/*
+
 canvas.addEventListener('mousewheel', function(event) {
   console.log(event)
   if(event.deltaY > 0){
-    DZ += 0.05
+    DZ += 8
   }
+
   if(event.deltaY < 0){
-    DZ -= 0.05
-    if (DZ < .01){
-      DZ = .01
+    DZ -= 8
+    if (DZ < 1){
+      DZ = 1
     }
   }
   DZX = event.offsetX
   DZY = event.offsetY
-  console.log(DZ)
 }, false);
-*/ 
-DZ = 15
 
 var backgroundTextures = {
   "DeepestWater":0,
@@ -155,11 +156,16 @@ var backgroundTextures = {
 }
 var backgroundTextureImages = {}
 var i=0
+var backgroundPixelColor = {}
 for (const textureName in backgroundTextures) {
   backgroundTextureImages[i] = new Image()
   backgroundTextureImages[i].src = "Textures/Background/" + textureName + ".png"
   i++;
-}
+} 
+setTimeout (function (){
+
+},5000)
+
 
 var mapFractal = []
 for (var x = 0; x < vcw *2; x++) {
@@ -176,55 +182,59 @@ for (var x = 0; x < vcw *2; x++) {
     valueS *= 50
     var value = Math.abs(noise.perlin2(((x + DX) / 100 * DZ), (y + DY) / 100 * DZ));
     value *= 76
-    var valueA = Math.abs(noise.perlin2(((x + DX) / 3200 * DZ), (y + DY) / 3200 * DZ));
-    valueA *= 480
+    //var valueA = Math.abs(noise.perlin2(((x + DX) / 3500 * DZ), (y + DY) / 3500 * DZ));
+    // valueA *= 1000
+    var valueAB = Math.abs(noise.perlin2(((x + DX) / 2800 * DZ), (y + DY) / 2800 * DZ));
+    valueAB *= 480
     valueSS -= valueSSS
     valueS -= valueSS
     value -= valueS
-    valueA -= value
+    valueAB -= value
+    //valueA -= value
+    //valueAB -= valueA
 
   mapFractal[x][y] = backgroundTextures.Grass
-    if (valueA < 24){
+    if (valueAB < 24){
       //landValue = [0,0,50]
         mapFractal [x][y] = backgroundTextures.DeepestWater
     };
-    if (valueA > 24 && valueA < 50){
+    if (valueAB > 24 && valueAB < 50){
       // landValue = [0,0,125]
       mapFractal [x][y] = backgroundTextures.DeepWater
     };
-    if (valueA > 50 && valueA < 65){
+    if (valueAB > 50 && valueAB < 65){
       //landValue = [0,0,200]
       mapFractal [x][y] = backgroundTextures.MediumWater
     }
-    if (valueA > 65 && valueA < 85){
+    if (valueAB > 65 && valueAB < 85){
       //landValue = [0,0,255]
       mapFractal [x][y] = backgroundTextures.ShallowWater
     }
-    if (valueA > 85 && valueA < 100){
+    if (valueAB > 85 && valueAB < 100){
       //landValue = [255,255,0]
       mapFractal [x][y] = backgroundTextures.Sand
     }
-    if (valueA > 100 && valueA < 160){
+    if (valueAB > 100 && valueAB < 160){
       //landValue = [0,200,0]
       mapFractal [x][y] = backgroundTextures.Grass
     }
-    if (valueA > 160 && valueA < 170){
+    if (valueAB > 160 && valueAB < 170){
       //landValue = [25,25,25]
       mapFractal [x][y] = backgroundTextures.MountainExtraLow
     }
-    if (valueA > 170 && valueA < 185){
+    if (valueAB > 170 && valueAB < 185){
       //landValue = [25,25,25]
       mapFractal [x][y] = backgroundTextures.MountainLow
     }
-    if (valueA > 185 && valueA < 200){
+    if (valueAB > 185 && valueAB < 200){
       //landValue = [25,25,25]
       mapFractal [x][y] = backgroundTextures.MountainMed
     }
-    if (valueA > 200 && valueA < 230){
+    if (valueAB > 200 && valueAB < 230){
       //landValue = [25,25,25]
       mapFractal [x][y] = backgroundTextures.MountainHigh
     }
-        if (valueA > 230){
+        if (valueAB > 230){
       //landValue = [25,25,25]
       mapFractal [x][y] = backgroundTextures.MountainSnow
     }
@@ -266,20 +276,21 @@ function drawMap(){
     viewerWindow.x ++;
   }
  
-
-
-  for (var x = 0; x < canvas.width/8; x++) {
-    for (var y = 0; y < canvas.height/8; y++) {
+ctx.imageSmoothingEnabled = false;
+var tileSize = Math.round(DZ)
+console.log(tileSize, canvas.width/tileSize, canvas.height/tileSize)
+  for (var x = 0; x < canvas.width/tileSize; x++) {
+    for (var y = 0; y < canvas.height/tileSize; y++) {
 
       var mapFractalTextureIndex = mapFractal[viewerWindow.x + x][viewerWindow.y + y]
       if (!backgroundTextureImages[mapFractalTextureIndex]){
         debugger
       }
       ctx.drawImage(backgroundTextureImages[mapFractalTextureIndex],
-        x * 8, 
-        y * 8,
-        8, 
-        8
+        x * tileSize, 
+        y * tileSize,
+        tileSize, 
+        tileSize
       )
     }
   }
@@ -310,6 +321,7 @@ function drawMap(){
 function gameLoop(){
   drawMap()
   requestAnimationFrame(gameLoop)
+
 }
 
 requestAnimationFrame(gameLoop)
