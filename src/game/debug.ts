@@ -24,6 +24,11 @@ export interface WorldGameDebugState {
     anchor: 'viewport-center';
     lastCenterDrift: number;
   };
+  render: {
+    lod: 'detail' | 'overview';
+    overviewVisible: boolean;
+    detailVisible: boolean;
+  };
   input: {
     wheelEvents: number;
     acceptedZoomSteps: number;

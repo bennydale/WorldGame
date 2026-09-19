@@ -1,4 +1,4 @@
-import { Input, Math as PhaserMath, Scene, Scenes, WEBGL } from 'phaser';
+import { Input, Math as PhaserMath, Scene, Scenes, Textures, WEBGL } from 'phaser';
 import { PerlinNoise } from '../noise/PerlinNoise';
 import {
   GeneratedTerrain,
@@ -11,9 +11,21 @@ import {
 import { setWorldGameDebugState } from './debug';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4] as const;
+const TERRAIN_DETAIL_TEXTURE_KEY = 'world-terrain-tiles';
+const TERRAIN_OVERVIEW_TEXTURE_KEY = 'world-terrain-overview';
+const TERRAIN_OVERVIEW_ZOOM_THRESHOLD = 1;
 const PAN_SPEED = 540;
 const WHEEL_STEP_COOLDOWN_MS = 110;
 const PAN_STATUS_INTERVAL_MS = 50;
+
+type TerrainLod = 'detail' | 'overview';
+
+interface TerrainColor {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+}
 
 interface MovementKeys {
   up: Phaser.Input.Keyboard.Key;
@@ -33,6 +45,9 @@ export class WorldScene extends Scene {
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private movementKeys?: MovementKeys;
   private terrain!: GeneratedTerrain;
+  private terrainDetailLayer!: Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer;
+  private terrainOverview!: Phaser.GameObjects.Image;
+  private terrainLod: TerrainLod = 'detail';
   private seed = 0;
   private generationMs = 0;
   private zoomIndex = 0;
@@ -75,6 +90,7 @@ export class WorldScene extends Scene {
       .setRoundPixels(true)
       .setZoom(ZOOM_LEVELS[this.zoomIndex])
       .centerOn(TERRAIN_WORLD_WIDTH / 2, TERRAIN_WORLD_HEIGHT / 2);
+    this.applyTerrainLod(ZOOM_LEVELS[this.zoomIndex]);
     this.camera.preRender();
 
     this.cacheHudElements();
@@ -104,9 +120,8 @@ export class WorldScene extends Scene {
   }
 
   private createTerrainLayer(): void {
-    const atlasKey = 'world-terrain-tiles';
     const texture = this.textures.createCanvas(
-      atlasKey,
+      TERRAIN_DETAIL_TEXTURE_KEY,
       TERRAIN_TILE_SIZE * TERRAIN_BANDS.length,
       TERRAIN_TILE_SIZE
     );
@@ -139,6 +154,10 @@ export class WorldScene extends Scene {
     });
 
     texture.refresh();
+    texture.setFilter(Textures.FilterMode.NEAREST);
+
+    const averageColors = this.calculateAverageTerrainColors(context);
+    this.createTerrainOverview(averageColors);
 
     const rows = Array.from({ length: this.terrain.height }, (_, y) => {
       const rowStart = y * this.terrain.width;
@@ -151,7 +170,7 @@ export class WorldScene extends Scene {
     });
     const tileset = tilemap.addTilesetImage(
       'world-terrain',
-      atlasKey,
+      TERRAIN_DETAIL_TEXTURE_KEY,
       TERRAIN_TILE_SIZE,
       TERRAIN_TILE_SIZE,
       0,
@@ -163,7 +182,88 @@ export class WorldScene extends Scene {
       throw new Error('Unable to create the WorldGame Phaser tileset.');
     }
 
-    tilemap.createLayer(0, tileset, 0, 0);
+    const detailLayer = tilemap.createLayer(0, tileset, 0, 0);
+
+    if (!detailLayer) {
+      throw new Error('Unable to create the WorldGame terrain layer.');
+    }
+
+    this.terrainDetailLayer = detailLayer;
+  }
+
+  private calculateAverageTerrainColors(context: CanvasRenderingContext2D): TerrainColor[] {
+    return TERRAIN_BANDS.map((_band, bandIndex) => {
+      const pixels = context.getImageData(
+        bandIndex * TERRAIN_TILE_SIZE,
+        0,
+        TERRAIN_TILE_SIZE,
+        TERRAIN_TILE_SIZE
+      ).data;
+      const pixelCount = pixels.length / 4;
+      let weightedRed = 0;
+      let weightedGreen = 0;
+      let weightedBlue = 0;
+      let alphaTotal = 0;
+
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        const alpha = pixels[offset + 3];
+        weightedRed += pixels[offset] * alpha;
+        weightedGreen += pixels[offset + 1] * alpha;
+        weightedBlue += pixels[offset + 2] * alpha;
+        alphaTotal += alpha;
+      }
+
+      if (alphaTotal === 0) {
+        return { red: 0, green: 0, blue: 0, alpha: 0 };
+      }
+
+      return {
+        red: Math.round(weightedRed / alphaTotal),
+        green: Math.round(weightedGreen / alphaTotal),
+        blue: Math.round(weightedBlue / alphaTotal),
+        alpha: Math.round(alphaTotal / pixelCount)
+      };
+    });
+  }
+
+  private createTerrainOverview(averageColors: readonly TerrainColor[]): void {
+    const texture = this.textures.createCanvas(
+      TERRAIN_OVERVIEW_TEXTURE_KEY,
+      this.terrain.width,
+      this.terrain.height
+    );
+
+    if (!texture) {
+      throw new Error('Unable to allocate the WorldGame terrain overview.');
+    }
+
+    const context = texture.getContext();
+    const imageData = context.createImageData(this.terrain.width, this.terrain.height);
+
+    for (let tileOffset = 0; tileOffset < this.terrain.tileIndices.length; tileOffset += 1) {
+      const color = averageColors[this.terrain.tileIndices[tileOffset]];
+      const pixelOffset = tileOffset * 4;
+      imageData.data[pixelOffset] = color.red;
+      imageData.data[pixelOffset + 1] = color.green;
+      imageData.data[pixelOffset + 2] = color.blue;
+      imageData.data[pixelOffset + 3] = color.alpha;
+    }
+
+    context.putImageData(imageData, 0, 0);
+    texture.refresh();
+    texture.setFilter(Textures.FilterMode.NEAREST);
+
+    this.terrainOverview = this.add
+      .image(0, 0, TERRAIN_OVERVIEW_TEXTURE_KEY)
+      .setOrigin(0, 0)
+      .setScale(TERRAIN_TILE_SIZE);
+  }
+
+  private applyTerrainLod(zoom: number): void {
+    const useOverview = zoom < TERRAIN_OVERVIEW_ZOOM_THRESHOLD;
+    this.terrainLod = useOverview ? 'overview' : 'detail';
+    this.terrainOverview.setVisible(useOverview);
+    this.terrainDetailLayer.setVisible(!useOverview);
   }
 
   private configureKeyboard(): void {
@@ -236,7 +336,9 @@ export class WorldScene extends Scene {
     const centerBeforeY = this.camera.midPoint.y;
 
     this.zoomIndex = nextIndex;
-    this.camera.setZoom(ZOOM_LEVELS[this.zoomIndex]);
+    const zoom = ZOOM_LEVELS[this.zoomIndex];
+    this.camera.setZoom(zoom);
+    this.applyTerrainLod(zoom);
     this.camera.centerOn(centerBeforeX, centerBeforeY);
     this.camera.preRender();
 
@@ -345,6 +447,7 @@ export class WorldScene extends Scene {
       this.status.dataset.acceptedZoomSteps = String(this.acceptedZoomSteps);
       this.status.dataset.lastWheelDeltaY = String(this.lastWheelDeltaY ?? '');
       this.status.dataset.lastAction = lastAction;
+      this.status.dataset.terrainLod = this.terrainLod;
     }
 
     setWorldGameDebugState({
@@ -372,6 +475,11 @@ export class WorldScene extends Scene {
         scrollY: Number(this.camera.scrollY.toFixed(4)),
         anchor: 'viewport-center',
         lastCenterDrift: Number(this.lastCenterDrift.toFixed(6))
+      },
+      render: {
+        lod: this.terrainLod,
+        overviewVisible: this.terrainOverview.visible,
+        detailVisible: this.terrainDetailLayer.visible
       },
       input: {
         wheelEvents: this.wheelEvents,
